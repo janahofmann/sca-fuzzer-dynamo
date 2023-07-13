@@ -20,7 +20,7 @@ INPUT_GENERATORS: Dict[str, Type[interfaces.InputGenerator]] = {
     'legacy-random': input_generator.LegacyRandomInputGenerator,
 }
 
-TRACERS: Dict[str, Type[model.UnicornTracer]] = {
+UNICORN_TRACERS: Dict[str, Type[model.UnicornTracer]] = {
     "l1d": model.L1DTracer,
     "pc": model.PCTracer,
     "memory": model.MemoryTracer,
@@ -32,7 +32,7 @@ TRACERS: Dict[str, Type[model.UnicornTracer]] = {
     "gpr": model.GPRTracer,
 }
 
-X86_SIMPLE_EXECUTION_CLAUSES: Dict[str, Type[x86_model.X86UnicornModel]] = {
+UNICORN_X86_SIMPLE_EXECUTION_CLAUSES: Dict[str, Type[x86_model.X86UnicornModel]] = {
     "seq": x86_model.X86UnicornSeq,
     "no_speculation": x86_model.X86UnicornSeq,
     "seq-assist": x86_model.X86SequentialAssist,
@@ -94,12 +94,12 @@ def get_fuzzer(instruction_set, working_directory, testcase, inputs):
         if CONF.instruction_set == "x86-64":
             return x86_fuzzer.X86ArchitecturalFuzzer(instruction_set, working_directory, testcase,
                                                      inputs)
-        raise ConfigException("ERROR: unknown value of `instruction_set` configuration option")
+        raise ConfigValueError("instruction_set")
     elif CONF.fuzzer == "basic":
         if CONF.instruction_set == "x86-64":
             return x86_fuzzer.X86Fuzzer(instruction_set, working_directory, testcase, inputs)
-        raise ConfigException("ERROR: unknown value of `instruction_set` configuration option")
-    raise ConfigException("ERROR: unknown value of `fuzzer` configuration option")
+        raise ConfigValueError("instruction_set")
+    raise ConfigValueError("fuzzer")
 
 
 def get_program_generator(instruction_set: interfaces.InstructionSetAbstract,
@@ -114,29 +114,30 @@ def get_input_generator(seed: int) -> interfaces.InputGenerator:
 
 def get_model(bases: Tuple[int, int]) -> interfaces.Model:
     model_instance: model.UnicornModel
+    if CONF.instruction_set != 'x86-64':
+        raise ConfigValueError("instruction_set")
 
-    if CONF.instruction_set == 'x86-64':
-        if "cond" in CONF.contract_execution_clause and "bpas" in CONF.contract_execution_clause:
-            model_instance = x86_model.X86UnicornCondBpas(bases[0], bases[1])
-        elif "conditional_br_misprediction" in CONF.contract_execution_clause and \
-             "nullinj-fault" in CONF.contract_execution_clause:
-            model_instance = x86_model.X86NullInjCond(bases[0], bases[1])
-        elif len(CONF.contract_execution_clause) == 1:
-            model_instance = _get_from_config(X86_SIMPLE_EXECUTION_CLAUSES,
+    if CONF.model_backend == 'unicorn':
+        if len(CONF.contract_execution_clause) == 1:
+            model_instance = _get_from_config(UNICORN_X86_SIMPLE_EXECUTION_CLAUSES,
                                               CONF.contract_execution_clause[0],
                                               "contract_execution_clause", bases[0], bases[1])
+        elif "cond" in CONF.contract_execution_clause and \
+                "bpas" in CONF.contract_execution_clause:
+            model_instance = x86_model.X86UnicornCondBpas(bases[0], bases[1])
+        elif "conditional_br_misprediction" in CONF.contract_execution_clause and \
+                "nullinj-fault" in CONF.contract_execution_clause:
+            model_instance = x86_model.X86NullInjCond(bases[0], bases[1])
         else:
-            raise ConfigException(
-                "ERROR: unknown value of `contract_execution_clause` configuration option")
+            raise ConfigValueError("contract_execution_clause")
 
         model_instance.taint_tracker_cls = x86_model.X86TaintTracker
 
+        # observational part of the contract
+        model_instance.tracer = _get_from_config(UNICORN_TRACERS, CONF.contract_observation_clause,
+                                                 "contract_observation_clause")
     else:
-        raise ConfigException("ERROR: unknown value of `model` configuration option")
-
-    # observational part of the contract
-    model_instance.tracer = _get_from_config(TRACERS, CONF.contract_observation_clause,
-                                             "contract_observation_clause")
+        raise ConfigValueError("model_backend")
 
     return model_instance
 
@@ -161,3 +162,10 @@ def get_minimizer(instruction_set: interfaces.InstructionSetAbstract) -> interfa
 
 def get_downloader(arch: str, extensions: List[str], out_file: str) -> Callable:
     return _get_from_config(SPEC_DOWNLOADERS, arch, "architecture", extensions, out_file)
+
+
+class ConfigValueError(ValueError):
+
+    def __init__(self, name):
+        message = "ERROR: unknown value of " + name + " configuration option"
+        super(ConfigValueError, self).__init__(message)

@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 from typing import Tuple, Dict, Type, List, Callable
 
 from . import input_generator, analyser, coverage, postprocessor, interfaces, model
-from .x86 import x86_model, x86_executor, x86_fuzzer, x86_generator, get_spec
+from .x86 import x86_uni_model, x86_executor, x86_fuzzer, x86_generator, get_spec
 from .config import CONF, ConfigException
 
 GENERATORS: Dict[str, Type[interfaces.Generator]] = {
@@ -32,28 +32,29 @@ UNICORN_TRACERS: Dict[str, Type[model.UnicornTracer]] = {
     "gpr": model.GPRTracer,
 }
 
-UNICORN_X86_SIMPLE_EXECUTION_CLAUSES: Dict[str, Type[x86_model.X86UnicornModel]] = {
-    "seq": x86_model.X86UnicornSeq,
-    "no_speculation": x86_model.X86UnicornSeq,
-    "seq-assist": x86_model.X86SequentialAssist,
-    "cond": x86_model.X86UnicornCond,
-    "conditional_br_misprediction": x86_model.X86UnicornCond,
-    "bpas": x86_model.X86UnicornBpas,
-    "nullinj-fault": x86_model.X86UnicornNull,
-    "nullinj-assist": x86_model.X86UnicornNullAssist,
-    "delayed-exception-handling": x86_model.X86UnicornDEH,
-    "div-zero": x86_model.X86UnicornDivZero,
-    "div-overflow": x86_model.X86UnicornDivOverflow,
-    "meltdown": x86_model.X86Meltdown,
-    "fault-skip": x86_model.X86FaultSkip,
-    "noncanonical": x86_model.X86NonCanonicalAddress,
-    "vspec-ops-div": x86_model.x86UnicornVspecOpsDIV,
-    "vspec-ops-memory-faults": x86_model.x86UnicornVspecOpsMemoryFaults,
-    "vspec-ops-memory-assists": x86_model.x86UnicornVspecOpsMemoryAssists,
-    "vspec-ops-gp": x86_model.x86UnicornVspecOpsGP,
-    "vspec-all-div": x86_model.x86UnicornVspecAllDIV,
-    "vspec-all-memory-faults": x86_model.X86UnicornVspecAllMemoryFaults,
-    "vspec-all-memory-assists": x86_model.X86UnicornVspecAllMemoryAssists,
+UNICORN_X86_SIMPLE_EXECUTION_CLAUSES: Dict[str, Type[x86_uni_model.X86UnicornModel]] = {
+    "seq": x86_uni_model.X86UnicornSeq,
+    "no_speculation": x86_uni_model.X86UnicornSeq,
+    "seq-assist": x86_uni_model.X86SequentialAssist,
+    "cond": x86_uni_model.X86UnicornCond,
+    "conditional_br_misprediction": x86_uni_model.X86UnicornCond,
+    "bpas": x86_uni_model.X86UnicornBpas,
+    "nullinj-fault": x86_uni_model.X86UnicornNull,
+    "nullinj-assist": x86_uni_model.X86UnicornNullAssist,
+    "delayed-exception-handling": x86_uni_model.X86UnicornDEH,
+    "div-zero": x86_uni_model.X86UnicornDivZero,
+    "div-overflow": x86_uni_model.X86UnicornDivOverflow,
+    "meltdown": x86_uni_model.X86Meltdown,
+    "fault-skip": x86_uni_model.X86FaultSkip,
+    "noncanonical": x86_uni_model.X86NonCanonicalAddress,
+    "vspec-ops-div": x86_uni_model.x86UnicornVspecOpsDIV,
+    "vspec-ops-memory-faults": x86_uni_model.x86UnicornVspecOpsMemoryFaults,
+    "vspec-ops-memory-assists": x86_uni_model.x86UnicornVspecOpsMemoryAssists,
+    "vspec-ops-gp": x86_uni_model.x86UnicornVspecOpsGP,
+    "vspec-all-div": x86_uni_model.x86UnicornVspecAllDIV,
+    "vspec-all-memory-faults": x86_uni_model.X86UnicornVspecAllMemoryFaults,
+    "vspec-all-memory-assists": x86_uni_model.X86UnicornVspecAllMemoryAssists,
+}
 }
 
 EXECUTORS = {
@@ -124,14 +125,14 @@ def get_model(bases: Tuple[int, int]) -> interfaces.Model:
                                               "contract_execution_clause", bases[0], bases[1])
         elif "cond" in CONF.contract_execution_clause and \
                 "bpas" in CONF.contract_execution_clause:
-            model_instance = x86_model.X86UnicornCondBpas(bases[0], bases[1])
+            model_instance = x86_uni_model.X86UnicornCondBpas(bases[0], bases[1])
         elif "conditional_br_misprediction" in CONF.contract_execution_clause and \
                 "nullinj-fault" in CONF.contract_execution_clause:
-            model_instance = x86_model.X86NullInjCond(bases[0], bases[1])
+            model_instance = x86_uni_model.X86NullInjCond(bases[0], bases[1])
         else:
             raise ConfigValueError("contract_execution_clause")
 
-        model_instance.taint_tracker_cls = x86_model.X86TaintTracker
+        model_instance.taint_tracker_cls = x86_uni_model.X86TaintTracker
 
         # observational part of the contract
         model_instance.tracer = _get_from_config(UNICORN_TRACERS, CONF.contract_observation_clause,

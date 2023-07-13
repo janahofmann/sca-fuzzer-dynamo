@@ -23,7 +23,7 @@ from .util import Logger, NotSupportedException
 
 
 # ==================================================================================================
-# Abstract Interfaces
+# Unicorn: Abstract Interfaces
 # ==================================================================================================
 class UnicornTargetDesc(ABC):
     registers: List[int]
@@ -475,7 +475,7 @@ class UnicornModel(Model, ABC):
 
 
 # ==================================================================================================
-# Implementation of Observation Clauses
+# Unicorn: Implementation of Observation Clauses
 # ==================================================================================================
 class L1DTracer(UnicornTracer):
 
@@ -585,7 +585,7 @@ class GPRTracer(UnicornTracer):
 
 
 # ==================================================================================================
-# Implementation of Execution Clauses
+# Unicorn: Implementation of Execution Clauses
 # ==================================================================================================
 class UnicornSeq(UnicornModel):
     """
@@ -758,7 +758,7 @@ class UnicornBpas(UnicornSpec):
 
 
 # ==================================================================================================
-# Implementation of Tainting
+# Unicorn: Implementation of Tainting
 # ==================================================================================================
 class DummyTaintTracker(TaintTrackerInterface):
 

@@ -267,8 +267,9 @@ class Logger:
                 print("================================ Statistics ================================"
                       "===\n")
                 print(STAT)
-            print(f"Duration: {(now - self.start_time).total_seconds():.1f}")
-            print(datetime.today().strftime('Finished at %H:%M:%S'))
+
+            self.inform("fuzzer", f"Duration: {(now - self.start_time).total_seconds():.1f}")
+            self.inform("fuzzer", datetime.today().strftime('Finished at %H:%M:%S'))
 
     def trc_fuzzer_dump_traces(self, model, inputs, htraces, ctraces, hw_feedback, nesting):
         if not __debug__:

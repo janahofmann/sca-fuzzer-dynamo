@@ -9,7 +9,7 @@ from typing import List
 from pathlib import Path
 from copy import deepcopy
 
-import src.x86.x86_model as x86_model
+import src.x86.x86_uni_model as x86_uni_model
 import src.model as core_model
 
 from src.interfaces import Instruction, RegisterOperand, MemoryOperand, InputTaint, LabelOperand, \
@@ -196,7 +196,7 @@ class X86ModelTest(unittest.TestCase):
 
     def test_gpr_tracer(self):
         mem_base, code_base = 0x1000000, 0x8000
-        model = x86_model.X86UnicornSeq(mem_base, code_base)
+        model = x86_uni_model.X86UnicornSeq(mem_base, code_base)
         model.tracer = core_model.GPRTracer()
         input_ = Input()
         input_[0] = 0
@@ -209,35 +209,35 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(full_trace, expected_trace)
 
     def test_l1d_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.L1DTracer()
         ctraces = self.get_traces(model, ASM_THREE_LOADS, [Input()])
         expected_trace = (1 << 63) + (1 << 55) + (1 << 47)
         self.assertEqual(ctraces, [expected_trace])
 
     def test_pc_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.PCTracer()
         ctraces = self.get_traces(model, ASM_BRANCH_AND_LOAD, [Input()])
         expected_trace = hash(tuple([0x0, 0x3, 0x5, 0x8]))
         self.assertEqual(ctraces, [expected_trace])
 
     def test_mem_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.MemoryTracer()
         ctraces = self.get_traces(model, ASM_THREE_LOADS, [Input()])
         expected_trace = hash(tuple([0, 512, 1050]))
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ct_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         ctraces = self.get_traces(model, ASM_BRANCH_AND_LOAD, [Input()])
         expected_trace = hash(tuple([0x0, 0x3, 0x5, 0, 0x8]))
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ctr_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.CTRTracer()
         input_ = Input()
         for i in range(0, 7):
@@ -248,7 +248,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces, [expected_trace])
 
     def test_arch_seq(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.ArchTracer()
         input_ = Input()
         input_[0] = 1
@@ -260,14 +260,14 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ct_cond(self):
-        model = x86_model.X86UnicornCond(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornCond(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         ctraces = self.get_traces(model, ASM_BRANCH_AND_LOAD, [Input()])
         expected_trace = hash(tuple([0x0, 0x3, 0x8, 0x5, 0, 0x8]))
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ct_cond_double(self):
-        model = x86_model.X86UnicornCond(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornCond(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         ctraces = self.get_traces(model, ASM_DOUBLE_BRANCH, [Input()], nesting=2)
         expected_trace = hash(
@@ -288,7 +288,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ct_bpas(self):
-        model = x86_model.X86UnicornBpas(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornBpas(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         input_ = Input()
         input_[0] = 1
@@ -297,14 +297,14 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces, [expected_trace])
 
     def test_rollback_on_fence(self):
-        model = x86_model.X86UnicornCond(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornCond(0x1000000, 0x8000)
         model.tracer = core_model.MemoryTracer()
         ctraces = self.get_traces(model, ASM_FENCE, [Input()])
         expected_trace = hash(tuple([0]))
         self.assertEqual(ctraces, [expected_trace])
 
     def test_fault_handling(self):
-        model = x86_model.X86UnicornSeq(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornSeq(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -315,7 +315,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces, [expected_trace])
 
     def test_ct_nullinj(self):
-        model = x86_model.X86UnicornNullAssist(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornNullAssist(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.rw_protect = True
         model.handled_faults.update([12, 13])
@@ -340,7 +340,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertIn(ctraces[0], [expected_trace, expected_trace2])
 
     def test_ct_nullinj_term(self):
-        model = x86_model.X86UnicornNull(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornNull(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -368,7 +368,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertIn(ctraces[0], [expected_trace, expected_trace2])
 
     def test_ct_deh(self):
-        model = x86_model.X86UnicornDEH(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornDEH(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -387,7 +387,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_div_zero(self):
-        model = x86_model.X86UnicornDivZero(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornDivZero(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.add(21)
         input_ = Input()
@@ -399,7 +399,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_div_zero_fence(self):
-        model = x86_model.X86UnicornDivZero(0x1000000, 0x8000)
+        model = x86_uni_model.X86UnicornDivZero(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.rw_protect = True
         model.handled_faults.add(21)
@@ -417,7 +417,7 @@ class X86ModelTest(unittest.TestCase):
         pass
 
     def test_ct_meltdown(self):
-        model = x86_model.X86Meltdown(0x1000000, 0x8000)
+        model = x86_uni_model.X86Meltdown(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -436,7 +436,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_meltdown_fence(self):
-        model = x86_model.X86Meltdown(0x1000000, 0x8000)
+        model = x86_uni_model.X86Meltdown(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -457,7 +457,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_meltdown_double(self):
-        model = x86_model.X86Meltdown(0x1000000, 0x8000)
+        model = x86_uni_model.X86Meltdown(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -478,7 +478,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_branch_meltdown(self):
-        model = x86_model.X86CondMeltdown(0x1000000, 0x8000)
+        model = x86_uni_model.X86CondMeltdown(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -500,7 +500,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_meltdown_branch(self):
-        model = x86_model.X86CondMeltdown(0x1000000, 0x8000)
+        model = x86_uni_model.X86CondMeltdown(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -532,7 +532,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_skip_fault(self):
-        model = x86_model.X86FaultSkip(0x1000000, 0x8000)
+        model = x86_uni_model.X86FaultSkip(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.update([12, 13])
         input_ = Input()
@@ -550,7 +550,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], expected_trace)
 
     def test_ct_vsops(self):
-        model = x86_model.x86UnicornVspecOpsDIV(0x1000000, 0x8000)
+        model = x86_uni_model.x86UnicornVspecOpsDIV(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.add(21)
         input_ = Input()
@@ -575,7 +575,7 @@ class X86ModelTest(unittest.TestCase):
         self.assertEqual(ctraces[0], hash(expected_trace_full))
 
     def test_ct_vsall(self):
-        model = x86_model.x86UnicornVspecAllDIV(0x1000000, 0x8000)
+        model = x86_uni_model.x86UnicornVspecAllDIV(0x1000000, 0x8000)
         model.tracer = core_model.CTTracer()
         model.handled_faults.add(21)
         input_ = Input()
@@ -596,7 +596,7 @@ class X86ModelTest(unittest.TestCase):
 class X86TaintTrackerTest(unittest.TestCase):
 
     def test_dependency_tracking(self):
-        tracker = x86_model.X86TaintTracker([])
+        tracker = x86_uni_model.X86TaintTracker([])
 
         # reg -> reg
         tracker.start_instruction(Instruction("ADD")
@@ -640,7 +640,7 @@ class X86TaintTrackerTest(unittest.TestCase):
         self.assertCountEqual(tracker.reg_dependencies['DI'], ['SI', 'DI', '0x80'])
 
     def test_tainting(self):
-        tracker = x86_model.X86TaintTracker([])
+        tracker = x86_uni_model.X86TaintTracker([])
 
         # Initial dependency
         tracker.start_instruction(Instruction("ADD")
@@ -701,7 +701,7 @@ class X86TaintTrackerTest(unittest.TestCase):
         self.assertEqual(taint[reg_offset + 1], True)
 
     def test_label_to_taint(self):
-        tracker = x86_model.X86TaintTracker([])
+        tracker = x86_uni_model.X86TaintTracker([])
         tracker.tainted_labels = {'0x0', '0x40', '0x640', 'D', 'SI', '8', '14', 'DF', 'RIP'}
         taint: InputTaint = tracker.get_taint()
         register_start = taint.register_start

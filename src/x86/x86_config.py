@@ -19,6 +19,9 @@ x86_option_values = {
         'PP+P',
         # 'GPR' is intentionally left out
     ],
+    "model_backend": [
+        'unicorn',
+    ],
     'permitted_faults': [
         'DE-zero',
         'DE-overflow',

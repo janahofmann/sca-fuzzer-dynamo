@@ -100,7 +100,7 @@ class ConfCls:
 
     # ==============================================================================================
     # Contract Model
-    model: str = 'x86-unicorn'
+    model_backend: str = 'unicorn'
     """ model: """
     contract_execution_clause: List[str] = ["seq"]
     """ contract_execution_clause: """

@@ -41,3 +41,9 @@ cp adapter ~/.local/dr_model
 ```
 
 # Usage
+
+```
+cd adapters
+make example
+drrun -c ~/.local/dr_model/libdr_model.so --tracer ct --disable-normalization -- ./example 2
+```

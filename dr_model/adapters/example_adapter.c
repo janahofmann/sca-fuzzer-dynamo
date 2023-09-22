@@ -9,7 +9,7 @@
 
 void function_under_test(int a)
 {
-    int array[10] = { 0 };
+    int *array = malloc(10 * sizeof(int));
     int t = array[a % 10];
 }
 

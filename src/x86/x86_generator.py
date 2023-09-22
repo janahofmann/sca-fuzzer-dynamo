@@ -214,8 +214,7 @@ class X86Generator(ConfigurableGenerator, abc.ABC):
                         break
                     continue
                 elif op_spec.type == OT.REG:
-                    width = op_spec.width if "XMM" not in op_raw else 128
-                    if op_raw not in self.target_desc.registers[width]:
+                    if op_raw not in op_spec.values:
                         match = False
                         break
                     continue
@@ -370,8 +369,8 @@ class X86NonCanonicalAddressPass(Pass):
                         for idx, op in enumerate(instr.operands):
                             if op == mem_operand:
                                 old_op = instr.operands[idx]
-                                addr_op = MemoryOperand(offset_reg, old_op.get_width(),
-                                                        old_op.src, old_op.dest)
+                                addr_op = MemoryOperand(offset_reg, old_op.get_width(), old_op.src,
+                                                        old_op.dest)
                                 instr.operands[idx] = addr_op
 
                     # Make sure #GP only once. Otherwise Unicorn keeps raising an exception
@@ -438,21 +437,33 @@ class X86SandboxPass(Pass):
 
     def sandbox_memory_access(self, instr: Instruction, parent: BasicBlock):
         """ Force the memory accesses into the page starting from R14 """
+
+        def get_mask(op: MemoryOperand):
+            if op.width < 128:
+                return self.sandbox_address_mask
+            if "MOVUP" in instr.name \
+               or "DQU" in instr.name:
+                return self.sandbox_address_mask
+            if op.width == 128:
+                return self.sandbox_address_mask[:-4] + "0" * 4
+            if op.width == 256:
+                return self.sandbox_address_mask[:-5] + "0" * 5
+            if op.width == 512:
+                return self.sandbox_address_mask[:-6] + "0" * 6
+            return self.sandbox_address_mask
+
         mem_operands = instr.get_mem_operands()
         implicit_mem_operands = instr.get_implicit_mem_operands()
-        mask = self.sandbox_address_mask
-        if "SSE" in instr.category:
-            mask = mask[:-4] + "0" * 4
 
         if mem_operands and not implicit_mem_operands:
             assert len(mem_operands) == 1, \
                 f"Instructions with multiple memory accesses are not yet supported: {instr.name}"
-            mem_operand: Operand = mem_operands[0]
+            mem_operand: MemoryOperand = mem_operands[0]
             address_reg = mem_operand.value
             imm_width = mem_operand.width if mem_operand.width <= 32 else 32
             apply_mask = Instruction("AND", True) \
                 .add_op(RegisterOperand(address_reg, mem_operand.width, True, True)) \
-                .add_op(ImmediateOperand(mask, imm_width)) \
+                .add_op(ImmediateOperand(get_mask(mem_operand), imm_width)) \
                 .add_op(FlagsOperand(["w", "w", "undef", "w", "w", "", "", "", "w"]), True)
             parent.insert_before(instr, apply_mask)
             instr.get_mem_operands()[0].value = "R14 + " + address_reg
@@ -473,14 +484,22 @@ class X86SandboxPass(Pass):
                     f"Unexpected address register {address_reg} used in {instr}"
                 apply_mask = Instruction("AND", True) \
                     .add_op(RegisterOperand(address_reg, mem_operand.width, True, True)) \
-                    .add_op(ImmediateOperand(mask, imm_width)) \
+                    .add_op(ImmediateOperand(get_mask(mem_operand), imm_width)) \
                     .add_op(FlagsOperand(["w", "w", "undef", "w", "w", "", "", "", "w"]), True)
+                parent.insert_before(instr, apply_mask)
+
                 add_base = Instruction("ADD", True) \
                     .add_op(RegisterOperand(address_reg, mem_operand.width, True, True)) \
                     .add_op(RegisterOperand("R14", 64, True, False)) \
                     .add_op(FlagsOperand(["w", "w", "undef", "w", "w", "", "", "", "w"]), True)
-                parent.insert_before(instr, apply_mask)
                 parent.insert_before(instr, add_base)
+
+                # restore the original register value
+                remove_base = Instruction("SUB", True) \
+                    .add_op(RegisterOperand(address_reg, mem_operand.width, True, True)) \
+                    .add_op(RegisterOperand("R14", 64, True, False)) \
+                    .add_op(FlagsOperand(["w", "w", "undef", "w", "w", "", "", "", "w"]), True)
+                parent.insert_after(instr, remove_base)
             return
 
         raise GeneratorException("Attempt to sandbox an instruction without memory operands")

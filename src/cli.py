@@ -225,6 +225,7 @@ def main() -> int:
             config_update: Dict = yaml.safe_load(f)
         for var, value in config_update.items():
             setattr(CONF, var, value)
+        CONF.finalize()
 
     # Fuzzing
     if args.subparser_name == 'fuzz':

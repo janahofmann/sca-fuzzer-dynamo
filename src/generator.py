@@ -9,7 +9,7 @@ from __future__ import annotations
 import random
 import abc
 import re
-from typing import List, Dict
+from typing import List, Dict, Set
 from subprocess import CalledProcessError, run
 from collections import OrderedDict
 
@@ -17,7 +17,7 @@ from .isa_loader import InstructionSet
 from .interfaces import Generator, TestCase, Operand, RegisterOperand, FlagsOperand, \
     MemoryOperand, ImmediateOperand, AgenOperand, LabelOperand, OT, Instruction, BasicBlock, \
     Function, OperandSpec, InstructionSpec, CondOperand, TargetDesc
-from .util import NotSupportedException, Logger
+from .util import NotSupportedException, Logger, STAT
 from .config import CONF
 
 
@@ -66,12 +66,15 @@ class ConfigurableGenerator(Generator, abc.ABC):
     passes: List[Pass]  # set by subclasses
     printer: Printer  # set by subclasses
     target_desc: TargetDesc  # set by subclasses
+    instruction_coverage: Set
 
     LOG: Logger  # name capitalized to make logging easily distinguishable from the main logic
 
     def __init__(self, instruction_set: InstructionSet, seed: int):
         super().__init__(instruction_set, seed)
         self.LOG = Logger()
+        self.instruction_coverage = set()
+
         self.LOG.dbg_gen_instructions(instruction_set.instructions)
         self.control_flow_instructions = \
             [i for i in self.instruction_set.instructions if i.control_flow]
@@ -473,8 +476,6 @@ class RandomGenerator(ConfigurableGenerator, abc.ABC):
         reg_type = spec.values[0]
         if reg_type == 'GPR':
             choices = self.target_desc.registers[spec.width]
-        elif reg_type == "SIMD":
-            choices = self.target_desc.simd_registers[spec.width]
         else:
             choices = spec.values
 
@@ -497,14 +498,23 @@ class RandomGenerator(ConfigurableGenerator, abc.ABC):
             address_reg = random.choice(self.target_desc.registers[64])
         return MemoryOperand(address_reg, spec.width, spec.src, spec.dest)
 
-    def generate_imm_operand(self, spec: OperandSpec, _: Instruction) -> Operand:
+    def generate_imm_operand(self, spec: OperandSpec, parent: Instruction) -> Operand:
+        def _is_num(value: str) -> bool:
+            try:
+                int(value)
+                return True
+            except ValueError:
+                return False
+
         if spec.values:
             if spec.values[0] == "bitmask":
                 # FIXME: this implementation always returns the same bitmask
                 # make it random
                 value = str(pow(2, spec.width) - 2)
+            elif _is_num(spec.values[0]):
+                value = spec.values[0]
             else:
-                assert "[" in spec.values[0], spec.values
+                assert "[" in spec.values[0], f"Parsing error: {spec.values[0]} in {parent.name}"
                 range_ = spec.values[0][1:-1].split("-")
                 if range_[0] == "":
                     range_ = range_[1:]
@@ -611,6 +621,8 @@ class RandomGenerator(ConfigurableGenerator, abc.ABC):
             spec = self._pick_random_instruction_spec()
             inst = self.generate_instruction(spec)
             bb.insert_after(bb.get_last(), inst)
+            self.instruction_coverage.add(inst.name)
+        STAT.cov_inst = len(self.instruction_coverage)
 
     def _pick_random_instruction_spec(self) -> InstructionSpec:
         # ensure the requested avg. number of mem. accesses
@@ -620,14 +632,20 @@ class RandomGenerator(ConfigurableGenerator, abc.ABC):
             memory_access_probability = 1 if self.had_recent_memory_access else \
                 (CONF.avg_mem_accesses / 2) / (CONF.program_size - CONF.avg_mem_accesses / 2)
 
-        if random.random() < memory_access_probability:
+        if not self.non_memory_access_instructions:
+            search_for_memory_access = True
+        elif not self.store_instructions and not self.load_instruction:
+            search_for_memory_access = False
+        elif random.random() < memory_access_probability:
             search_for_memory_access = True
             self.had_recent_memory_access = not self.had_recent_memory_access
 
-        if self.store_instructions:
-            search_for_store = random.random() < 0.5  # 50% probability of stores
-        else:
+        if not self.store_instructions:
             search_for_store = False
+        elif not self.load_instruction:
+            search_for_store = True
+        else:
+            search_for_store = random.random() < 0.5  # 50% probability of stores
 
         # select a random instruction spec for generation
         if not search_for_memory_access:

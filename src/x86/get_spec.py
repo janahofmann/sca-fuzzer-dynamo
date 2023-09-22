@@ -58,6 +58,10 @@ class ParseFailed(Exception):
     pass
 
 
+class ParserSkip(Exception):
+    pass
+
+
 class X86Transformer:
     tree: ET.Element
     instructions: List[InstructionSpec]
@@ -75,37 +79,55 @@ class X86Transformer:
         "DX": 16,
         "AL": 8,
         "AH": 8,
+        'CL': 8,
+        'CH': 8,
+        'R11': 64,
         "TMM0": 0,
-        "MXCSR": 32,
         'ES': 16,
         'SS': 16,
         'DS': 16,
         'FS': 16,
         'GS': 16,
+        'TSC': 0,
+        'TSCAUX': 0,
     }
+    system_registers = [
+        "MXCSR",
+        'GDTR',
+        'IDTR',
+        'LDTR',
+        'CR0',
+        'TR',
+        'MSRS',
+        'BND0',
+        'X87CONTROL',
+        'X87POP',
+    ]
     not_control_flow = ["INT", "INT1", "INT3", "INTO"]
     """ a list of instructions that have RIP as an operand but should
     not be considered as control-flow instructions by the generator"""
 
     def __init__(self) -> None:
         self.instructions = []
+        self.excluded_extensions = {'SYSTEM': 0}
 
     def load_files(self, filename: str):
         parser = ET.ElementTree()
         tree = parser.parse(filename)
         if not tree:
-            print("No input. Exiting")
+            print("[ERROR] No input. Exiting")
             exit(1)
         self.tree = tree
 
     def parse_tree(self, extensions: List[str]):
-        for instruction_node in self.tree.iter('instruction'):
-            if instruction_node.attrib.get('sae', '') == '1' or \
-               instruction_node.attrib.get('roundc', '') == '1' or \
-               instruction_node.attrib.get('zeroing', '') == '1':
-                continue
+        print(f"[INFO] All instructions: {len(list(self.tree.iter('instruction')))}")
 
-            if extensions and instruction_node.attrib['extension'] not in extensions:
+        for instruction_node in self.tree.iter('instruction'):
+            ex_name = instruction_node.attrib['extension']
+            if extensions and ex_name not in extensions:
+                if ex_name not in self.excluded_extensions:
+                    self.excluded_extensions[ex_name] = 0
+                self.excluded_extensions[ex_name] += 1
                 continue
 
             self.instruction = InstructionSpec()
@@ -151,9 +173,16 @@ class X86Transformer:
                         self.instruction.operands.append(parsed_op)
 
             except ParseFailed:
+                print(f"[WARNING] Failed to parse: {name}")
+                continue
+            except ParserSkip:
                 continue
 
             self.instructions.append(self.instruction)
+
+        # report on excluded
+        for ex_name, count in self.excluded_extensions.items():
+            print(f"[INFO]   excluded {ex_name} ({count} instructions)")
 
     def save(self, filename: str):
         json_str = "[\n" + ",\n".join([i.to_json() for i in self.instructions]) + "\n]"
@@ -165,6 +194,11 @@ class X86Transformer:
         spec = OperandSpec()
         spec.type_ = "REG"
         spec.values = op.text.split(',')
+
+        if spec.values[0] in self.system_registers:
+            self.excluded_extensions['SYSTEM'] += 1
+            raise ParserSkip()
+
         spec.src = True if op.attrib.get('r', "0") == "1" else False
         spec.dest = True if op.attrib.get('w', "0") == "1" else False
         spec.width = int(op.attrib.get('width', 0))
@@ -311,8 +345,65 @@ class X86Transformer:
                 self.instructions.append(inst)
 
 
+SUPPORTED_EXTENSIONS = [
+    "BASE",
+    "SSE",
+    "SSE2",
+    "SSE3",
+    "SSE4",
+    "SSE4a",
+    "AVX",
+    "AVX2",
+    "AVX_VNNI",
+    "CLFLUSHOPT",
+    "CLFSH",
+    "VTX",
+    "SVM",
+    "MPX",
+    "SSE",
+    "SGX",
+
+    # crypto
+    "AVXAES",
+    "AVX_VNNI",
+    "GFNI",
+    "AES",
+    "AVXAES",
+    "PCLMULQDQ",
+    "SHA",
+    "VAES",
+
+    # misc.
+    "ADOX_ADCX",
+    "BMI1",
+    "BMI2",
+    "CLDEMOTE",
+    "CLWB",
+    "CLZERO",
+    "LONGMODE",
+    "MCOMMIT",
+    "MOVBE",
+    "MOVDIR",
+    "PAUSE",
+    "RDRAND",
+    "RDSEED",
+    "RDTSCP",
+    "RDWRFSGS",
+    "SERIALIZE",
+    "SSSE3",
+    "TBM",
+    "VPCLMULQDQ",
+    "XOP",
+    "LZCNT",
+]
+
+
 class Downloader:
+
     def __init__(self, extensions: List[str], out_file: str) -> None:
+        if "ALL_SUPPORTED" in extensions:
+            extensions.extend(SUPPORTED_EXTENSIONS)
+            extensions = list(set(extensions))
         self.extensions = extensions
         self.out_file = out_file
 
@@ -328,7 +419,7 @@ class Downloader:
             transformer.load_files("x86_instructions.xml")
             transformer.parse_tree(self.extensions)
             transformer.add_missing(self.extensions)
-            print(f"Produced base.json with {len(transformer.instructions)} instructions")
+            print(f"\n[INFO] Produced base.json with {len(transformer.instructions)} instructions")
             transformer.save(self.out_file)
         finally:
             subprocess.run("rm x86_instructions.xml", shell=True, check=True)

@@ -8,7 +8,7 @@ SPDX-License-Identifier: MIT
 from typing import Tuple, Dict, Type, List, Callable
 
 from . import input_generator, analyser, coverage, postprocessor, interfaces, model
-from .x86 import x86_uni_model, x86_executor, x86_fuzzer, x86_generator, get_spec
+from .x86 import x86_uni_model, x86_dr_model, x86_executor, x86_fuzzer, x86_generator, get_spec
 from .config import CONF, ConfigException
 
 GENERATORS: Dict[str, Type[interfaces.Generator]] = {
@@ -55,6 +55,17 @@ UNICORN_X86_SIMPLE_EXECUTION_CLAUSES: Dict[str, Type[x86_uni_model.X86UnicornMod
     "vspec-all-memory-faults": x86_uni_model.X86UnicornVspecAllMemoryFaults,
     "vspec-all-memory-assists": x86_uni_model.X86UnicornVspecAllMemoryAssists,
 }
+
+DYNAMORIO_MODELS: Dict[str, Type[model.DRModel]] = {
+    "l1d": x86_dr_model.X86DRModel,
+    "pc": x86_dr_model.X86DRModel,
+    "memory": x86_dr_model.X86DRModel,
+    "ct": x86_dr_model.X86DRModel,
+    "loads+stores+pc": x86_dr_model.X86DRModel,
+    "ct-nonspecstore": x86_dr_model.X86DRModel,
+    "ctr": x86_dr_model.X86DRModel,
+    "arch": x86_dr_model.X86DRModel,
+    "gpr": x86_dr_model.X86DRModelGPR
 }
 
 EXECUTORS = {
@@ -137,6 +148,9 @@ def get_model(bases: Tuple[int, int]) -> interfaces.Model:
         # observational part of the contract
         model_instance.tracer = _get_from_config(UNICORN_TRACERS, CONF.contract_observation_clause,
                                                  "contract_observation_clause")
+    elif CONF.model_backend == 'dynamorio':
+        model_instance = _get_from_config(DYNAMORIO_MODELS, CONF.contract_observation_clause,
+                                          "contract_observation_clause", bases[0], bases[1])
     else:
         raise ConfigValueError("model_backend")
 

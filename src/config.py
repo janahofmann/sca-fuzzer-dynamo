@@ -162,7 +162,7 @@ class ConfCls:
     # Internal
     _borg_shared_state: Dict = {}
     _no_generation: bool = False
-    _option_values: Dict[str, List] = {}  # set by ISA-specific config.py
+    _option_values: Dict[str, Dict[str, List]] = {}  # set by ISA-specific config.py
     _default_instruction_blocklist: List[str] = []
 
     # Implementation of Borg pattern
@@ -170,6 +170,16 @@ class ConfCls:
         self.setattr_internal("__dict__", self._borg_shared_state)
 
     def __setattr__(self, name, value):
+        def get_allowed_values(name_):
+            options_dict = self._option_values[name_]
+            if not options_dict['depends_on']:
+                return options_dict['']
+
+            assert len(options_dict['depends_on']) == 1
+            dependency = options_dict['depends_on'][0]
+            dependency_value = getattr(self, dependency)
+            return options_dict[dependency_value]
+
         # print(f"CONF: setting {name} to {value}")
 
         # Sanity checks
@@ -187,14 +197,15 @@ class ConfCls:
 
         # value checks
         if self._option_values.get(name, '') != '':
+            allowed_values = get_allowed_values(name)
             invalid_value = None
             if isinstance(value, List):
                 for v in value:
-                    if v not in self._option_values[name]:
+                    if v not in allowed_values:
                         invalid_value = v
                         break
             else:
-                invalid_value = value if value not in self._option_values[name] else None
+                invalid_value = value if value not in allowed_values else None
             if invalid_value:
                 raise ConfigException(
                     f"ERROR: Unknown value '{invalid_value}' of config variable '{name}'\n"
@@ -219,6 +230,10 @@ class ConfCls:
 
         super().__setattr__(name, value)
 
+    def setattr_internal(self, name, val):
+        """ Bypass value checks and set an internal config variable. Use with caution! """
+        super().__setattr__(name, val)
+
     def update_arch(self):
         # arch-specific config
         if self.instruction_set == "x86-64":
@@ -240,9 +255,17 @@ class ConfCls:
             else:
                 super().__setattr__(option, values)
 
-    def setattr_internal(self, name, val):
-        """ Bypass value checks and set an internal config variable. Use with caution! """
-        super().__setattr__(name, val)
+    def finalize(self):
+        if self.instruction_set == "x86-64":
+            # note that below all assignments of instruction_blocklist actually
+            # extend _default_instruction_blocklist, see __setattr__ for details
+            if self.model_backend == "unicorn":
+                self.instruction_blocklist = x86_config.instruction_blocklist_unicorn
+            elif self.model_backend == "dynamorio":
+                self.instruction_blocklist = x86_config.instruction_blocklist_dynamorio
+
+            if getattr(self, "disable_fp_simd", False):
+                self.instruction_blocklist = x86_config.fpvi_blocklist
 
 
 CONF = ConfCls()

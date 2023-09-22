@@ -7,6 +7,7 @@ SPDX-License-Identifier: MIT
 import json
 from typing import Dict, List
 from .interfaces import OT, InstructionSetAbstract, OperandSpec, InstructionSpec
+from .util import Logger
 from .config import CONF
 
 
@@ -22,10 +23,13 @@ class InstructionSet(InstructionSetAbstract):
     }
 
     def __init__(self, filename: str, include_categories=None):
+        self.LOG = Logger()
+
         self.instructions: List[InstructionSpec] = []
         self.init_from_file(filename)
-        self.reduce(include_categories)
         self.dedup()
+        self.LOG.dbg_loader_instructions(self.instructions)
+        self.reduce(include_categories)
         super().__init__(filename, include_categories)
 
     def init_from_file(self, filename: str):

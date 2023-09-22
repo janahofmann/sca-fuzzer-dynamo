@@ -16,8 +16,7 @@ from unicorn import Uc, UC_MEM_WRITE, UC_ARCH_X86, UC_MODE_64, UC_PROT_READ, UC_
 from ..interfaces import Input, FlagsOperand, RegisterOperand, MemoryOperand, AgenOperand, TestCase
 from ..model import UnicornModel, UnicornTracer, UnicornSpec, UnicornSeq, UnicornBpas, \
     BaseTaintTracker
-from ..util import UnreachableCode, BLUE, COL_RESET
-from ..config import CONF
+from ..util import UnreachableCode
 from .x86_target_desc import X86UnicornTargetDesc, X86TargetDesc
 
 FLAGS_CF = 0b000000000001
@@ -84,7 +83,7 @@ class X86UnicornModel(UnicornModel):
             elif regs[i] == flags:  # EFLAGS value has to be masked
                 value = (value & np.uint64(2263)) | np.uint64(2)  # type: ignore
 
-            self.emulator.reg_write(regs[i], value)
+            self.emulator.reg_write(regs[i], int(value))
 
             # executor uses the lower bytes of the upper_overflow_region to initialize registers
             # we need to match it in the model
@@ -95,8 +94,11 @@ class X86UnicornModel(UnicornModel):
         self.emulator.reg_write(ucc.UC_X86_REG_R14, self.sandbox_base)
 
         # - initialize SIMD
-        for i, value in enumerate(input_.get_simd128_registers()):
-            self.emulator.reg_write(self.target_desc.simd128_registers[i], value)
+        simd_value: int
+        for i, simd_value in enumerate(input_.get_simd_registers()):
+            # unicorn doesn't support SIMD regs wider than 128 bits, hence mask the upper bits
+            simd_value = simd_value & 0xffffffffffffffffffffffffffffffff
+            self.emulator.reg_write(self.target_desc.simd_registers[i], simd_value)
 
         # Set memory permissions
         # Note: this code is at the end because we need to set the permissions
@@ -108,65 +110,28 @@ class X86UnicornModel(UnicornModel):
             self.emulator.mem_protect(self.sandbox_base + self.MAIN_REGION_SIZE,
                                       self.FAULTY_REGION_SIZE, UC_PROT_READ)
 
-    def print_state(self, oneline: bool = False):
-
-        def compressed(val: int):
-            if val >= self.sandbox_base and val <= self.sandbox_base + 12288:
-                return f"+0x{val - self.sandbox_base:<15x}"
-            elif val >= self.sandbox_base - self.OVERFLOW_REGION_SIZE and val < self.sandbox_base:
-                return f"+0x{val - self.sandbox_base:<15x}"
-            else:
-                return f"0x{val:016x}"
-
+    def print_state(self):
+        sandbox_top = self.sandbox_base + self.MAIN_REGION_SIZE + self.FAULTY_REGION_SIZE \
+            + self.OVERFLOW_REGION_SIZE
+        sandbox_bottom = self.sandbox_base - self.OVERFLOW_REGION_SIZE
         emulator = self.emulator
-        rax = compressed(emulator.reg_read(ucc.UC_X86_REG_RAX))
-        rbx = compressed(emulator.reg_read(ucc.UC_X86_REG_RBX))
-        rcx = compressed(emulator.reg_read(ucc.UC_X86_REG_RCX))
-        rdx = compressed(emulator.reg_read(ucc.UC_X86_REG_RDX))
-        rsi = compressed(emulator.reg_read(ucc.UC_X86_REG_RSI))
-        rdi = compressed(emulator.reg_read(ucc.UC_X86_REG_RDI))
 
-        if not oneline:
-            print("\n\nRegisters:")
-            print(f"RAX: {rax}")
-            print(f"RBX: {rbx}")
-            print(f"RCX: {rcx}")
-            print(f"RDX: {rdx}")
-            print(f"RSI: {rsi}")
-            print(f"RDI: {rdi}")
-        else:
-            if CONF.color:
-                print(f"  {BLUE}rax={COL_RESET}{rax} "
-                      f"{BLUE}rbx={COL_RESET}{rbx} "
-                      f"{BLUE}rcx={COL_RESET}{rcx} "
-                      f"{BLUE}rdx={COL_RESET}{rdx}\n"
-                      f"  {BLUE}rsi={COL_RESET}{rsi} "
-                      f"{BLUE}rdi={COL_RESET}{rdi} "
-                      f"{BLUE}flags={COL_RESET}0b{emulator.reg_read(ucc.UC_X86_REG_EFLAGS):012b}\n"
-                      f"  {BLUE}xmm0={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM0):x} "
-                      f"{BLUE}xmm1={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM1):x} \n"
-                      f"  {BLUE}xmm2={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM2):x} "
-                      f"{BLUE}xmm3={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM3):x} \n"
-                      f"  {BLUE}xmm4={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM4):x} "
-                      f"{BLUE}xmm5={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM5):x} \n"
-                      f"  {BLUE}xmm6={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM6):x} "
-                      f"{BLUE}xmm7={COL_RESET}0x{emulator.reg_read(ucc.UC_X86_REG_XMM7):x} \n")
-            else:
-                print(f"  rax={rax} "
-                      f"rbx={rbx} "
-                      f"rcx={rcx} "
-                      f"rdx={rdx}\n"
-                      f"  rsi={rsi} "
-                      f"rdi={rdi} "
-                      f"flags=0b{emulator.reg_read(ucc.UC_X86_REG_EFLAGS):012b}\n"
-                      f"  xmm0=0x{emulator.reg_read(ucc.UC_X86_REG_XMM0):x} "
-                      f"xmm1=0x{emulator.reg_read(ucc.UC_X86_REG_XMM1):x} \n"
-                      f"  xmm2=0x{emulator.reg_read(ucc.UC_X86_REG_XMM2):x} "
-                      f"xmm3=0x{emulator.reg_read(ucc.UC_X86_REG_XMM3):x} \n"
-                      f"  xmm4=0x{emulator.reg_read(ucc.UC_X86_REG_XMM4):x} "
-                      f"xmm5=0x{emulator.reg_read(ucc.UC_X86_REG_XMM5):x} \n"
-                      f"  xmm6=0x{emulator.reg_read(ucc.UC_X86_REG_XMM6):x} "
-                      f"xmm7=0x{emulator.reg_read(ucc.UC_X86_REG_XMM7):x} \n")
+        self.LOG.dbg_x86_formatted_reg_state(self.sandbox_base, sandbox_top, sandbox_bottom,
+                                             emulator.reg_read(ucc.UC_X86_REG_RAX),
+                                             emulator.reg_read(ucc.UC_X86_REG_RBX),
+                                             emulator.reg_read(ucc.UC_X86_REG_RCX),
+                                             emulator.reg_read(ucc.UC_X86_REG_RDX),
+                                             emulator.reg_read(ucc.UC_X86_REG_RSI),
+                                             emulator.reg_read(ucc.UC_X86_REG_RDI),
+                                             emulator.reg_read(ucc.UC_X86_REG_EFLAGS),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM0),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM1),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM2),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM3),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM4),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM5),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM6),
+                                             emulator.reg_read(ucc.UC_X86_REG_XMM7))
 
     def post_execution_patch(self) -> None:
         # workaround for Unicorn not enabling MPX

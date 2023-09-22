@@ -212,8 +212,8 @@ static inline int pre_measurement_setup(void)
 #elif CPU_FAMILY == 23
     // Disable prefetchers
     uint64_t dc_config = native_read_msr(0xC0011022); // Data Cache Configuration
-    dc_config |=  (1<<13);
-    dc_config |=  (1<<15);
+    dc_config |= (1 << 13);
+    dc_config |= (1 << 15);
     wrmsr64(0xC0011022, dc_config);
 #endif
 
@@ -261,66 +261,59 @@ static inline int uarch_flush(void)
     return 0;
 }
 
+int init_sandbox(uint64_t *current_input) {
 
-void init_sandbox(uint64_t *current_input) {
-        // Initialize the rest of the memory
-        // - sandbox: main and faulty regions
-        uint64_t *main_page_values = &current_input[0];
-        uint64_t *main_base = (uint64_t *)&sandbox->main_region[0];
-        for (int j = 0; j < MAIN_REGION_SIZE / 8; j += 1)
-        {
-            ((uint64_t *)main_base)[j] = main_page_values[j];
-        }
+    input_t *values = (input_t *)current_input;
 
-        uint64_t *faulty_page_values = &current_input[MAIN_REGION_SIZE / 8];
-        uint64_t *faulty_base = (uint64_t *)&sandbox->faulty_region[0];
-        for (int j = 0; j < FAULTY_REGION_SIZE / 8; j += 1)
-        {
-            ((uint64_t *)faulty_base)[j] = faulty_page_values[j];
-        }
+    // Initialize the rest of the memory
+    // - sandbox: main and faulty regions
+    uint64_t *main_page_values = (uint64_t *)values->main_region;
+    uint64_t *main_base = (uint64_t *)sandbox->main_region;
+    for (int j = 0; j < MAIN_REGION_SIZE / 8; j += 1)
+    {
+        main_base[j] = main_page_values[j];
+    }
 
-        // Initial register values (the registers will be set to these values in template.c)
-        uint64_t *register_values = &current_input[(MAIN_REGION_SIZE + FAULTY_REGION_SIZE) / 8];
-        uint64_t *register_initialization_base = (uint64_t *)&sandbox->upper_overflow[0];
+    uint64_t *faulty_page_values = (uint64_t *)values->faulty_region;
+    uint64_t *faulty_base = (uint64_t *)sandbox->faulty_region;
+    for (int j = 0; j < FAULTY_REGION_SIZE / 8; j += 1)
+    {
+        faulty_base[j] = faulty_page_values[j];
+    }
 
-        // - RAX ... RDI
-        for (int j = 0; j < 6; j += 1)
-        {
-            ((uint64_t *)register_initialization_base)[j] = register_values[j];
-        }
+    // Initial register values (the registers will be set to these values in template.c)
+    uint64_t *register_values = (uint64_t *)values->reg_region;
+    uint64_t *reg_base = (uint64_t *)sandbox->upper_overflow;
 
-        // - flags
-        uint64_t masked_flags = (register_values[6] & 2263) | 2;
-        ((uint64_t *)register_initialization_base)[6] = masked_flags;
+    // - RAX ... RDI + flags
+    for (int j = 0; j < 7; j += 1)
+    {
+        reg_base[j] = register_values[j];
+    }
 
-        // - RSP and RBP
-        ((uint64_t *)register_initialization_base)[7] = (uint64_t)stack_base;
+    // patch flags
+    reg_base[6] = (reg_base[6] & 2263) | 2;
 
-        // - XMM0 ... XMM15
-        asm volatile(""
-                     "movdqa 0x00(%0), %%xmm0\n"
-                     "movdqa 0x10(%0), %%xmm1\n"
-                     "movdqa 0x20(%0), %%xmm2\n"
-                     "movdqa 0x30(%0), %%xmm3\n"
-                     "movdqa 0x40(%0), %%xmm4\n"
-                     "movdqa 0x50(%0), %%xmm5\n"
-                     "movdqa 0x60(%0), %%xmm6\n"
-                     "movdqa 0x70(%0), %%xmm7\n"
-                     "movdqa 0x80(%0), %%xmm8\n"
-                     "movdqa 0x90(%0), %%xmm9\n"
-                     "movdqa 0xa0(%0), %%xmm10\n"
-                     "movdqa 0xb0(%0), %%xmm11\n"
-                     "movdqa 0xc0(%0), %%xmm12\n"
-                     "movdqa 0xd0(%0), %%xmm13\n"
-                     "movdqa 0xe0(%0), %%xmm14\n"
-                     "movdqa 0xf0(%0), %%xmm15\n"
-                      ::"r"(&register_values[8])
-                     : "xmm0");
+    // - RSP and RBP
+    reg_base[7] = (uint64_t)stack_base;
+
+    // - YMM0 ... YMM7
+    uint64_t *simd_values = (uint64_t *)values->simd_region;
+    uint64_t *simd_base = (uint64_t *)&sandbox->upper_overflow[REG_INITIALIZATION_REGION_SIZE];
+    for (int j = 0; j < 32; j += 4)
+    {
+        simd_base[j + 0] = simd_values[j + 0];
+        simd_base[j + 1] = simd_values[j + 1];
+        simd_base[j + 2] = simd_values[j + 2];
+        simd_base[j + 3] = simd_values[j + 3];
+    }
+    return 0;
 }
 
-
-void run_experiment_dirty(long rounds)
+int run_experiment_dirty(long rounds)
 {
+    int err = 0;
+
     get_cpu();
     unsigned long flags;
     raw_local_irq_save(flags);
@@ -339,7 +332,10 @@ void run_experiment_dirty(long rounds)
         long i_ = (i < 0) ? 0 : i;
         uint64_t *current_input = &inputs[i_ * INPUT_SIZE / 8];
 
-        init_sandbox(current_input);
+        if (init_sandbox(current_input)) {
+            err = 1;
+            break;
+        }
 
         // Set page table entry for the faulty region
         if ((faulty_pte_mask_set != 0) || (faulty_pte_mask_clear != 0xffffffffffffffff))
@@ -382,10 +378,13 @@ void run_experiment_dirty(long rounds)
 
     raw_local_irq_restore(flags);
     put_cpu();
+    return err;
 }
 
-void run_experiment(long rounds)
+int run_experiment(long rounds)
 {
+    int err = 0;
+
     get_cpu();
     unsigned long flags;
     raw_local_irq_save(flags);
@@ -424,7 +423,10 @@ void run_experiment(long rounds)
         if (pre_run_flush == 1)
             uarch_flush();
 
-        init_sandbox(current_input);
+        if (init_sandbox(current_input)) {
+            err = 1;
+            break;
+        }
 
         // Set page table entry for the faulty region
         if ((faulty_pte_mask_set != 0) || (faulty_pte_mask_clear != 0xffffffffffffffff))
@@ -467,6 +469,7 @@ void run_experiment(long rounds)
 
     raw_local_irq_restore(flags);
     put_cpu();
+    return err;
 }
 
 int trace_test_case(void)
@@ -492,18 +495,20 @@ int trace_test_case(void)
     // 3. Run the measurement
     if (pre_measurement_setup())
         return -1;
+
+    int err = 0;
     if (quick_and_dirty_mode)
     {
-        run_experiment_dirty((long)n_inputs);
+        err = run_experiment_dirty((long)n_inputs);
     }
     else
     {
-        run_experiment((long)n_inputs);
+        err = run_experiment((long)n_inputs);
     }
     post_measurement();
 
     kernel_fpu_end();
-    return 0;
+    return err;
 }
 
 // =================================================================================================

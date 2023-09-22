@@ -23,7 +23,7 @@ BLUE = '\033[33;34m'
 PURPLE = '\033[33;35m'
 CYAN = '\033[33;36m'
 GRAY = '\033[33;37m'
-COL_RESET = "\033[0m"
+RES = "\033[0m"
 
 
 class StatisticsCls:
@@ -44,6 +44,7 @@ class StatisticsCls:
     fp_taint_mistakes: int = 0
     fp_flaky: int = 0
     fp_priming: int = 0
+    cov_inst: int = 0
 
     # Implementation of Borg pattern
     def __init__(self) -> None:
@@ -73,6 +74,7 @@ class StatisticsCls:
         s += f"  Tainting Mistakes: {self.fp_taint_mistakes}\n"
         s += f"  Flaky Tests: {self.fp_flaky}\n"
         s += f"  Priming Check: {self.fp_priming}\n"
+        s += f"Instruction Coverage: {self.cov_inst}\n"
         return s
 
     def get_brief(self):
@@ -95,7 +97,8 @@ class StatisticsCls:
                  f"TM:{self.fp_taint_mistakes}," \
                  f"FL:{self.fp_flaky}," \
                  f"PR:{self.fp_priming}," \
-                 f"V:{self.violations}"
+                 f"V:{self.violations}," \
+                 f"IC:{self.cov_inst}"
             return s
 
 
@@ -187,7 +190,16 @@ class Logger:
             print(f"DBG: [{src}] {msg}")
 
     # ==============================================================================================
-    # Generator
+    # Generator and Loader
+    def dbg_loader_instructions(self, instructions):
+        if not __debug__:
+            return
+
+        if not self.dbg_generator or CONF._no_generation:
+            return
+
+        self.dbg("loader", f"Total num. instructions (pre-filtering): {len(instructions)}")
+
     def dbg_gen_instructions(self, instructions):
         if not __debug__:
             return
@@ -199,10 +211,12 @@ class Logger:
         for i in instructions:
             instructions_by_category[i.category].add(i.name)
 
+        count = 0
         self.dbg("generator", "Instructions under test:")
         for k, instruction_list in instructions_by_category.items():
+            count += len(instruction_list)
             print("  - " + k + ": " + pformat(sorted(instruction_list), indent=4, compact=True))
-        print("")
+        self.dbg("generator", f"Total num. instructions: {count} ({len(instructions)} variants)")
 
     # ==============================================================================================
     # Fuzzer
@@ -304,7 +318,7 @@ class Logger:
                   f"| Hash: {ctraces[i]}")
             print(f"  HTr: {pretty_trace(htraces[i])}")
             if CONF.color and hw_feedback[i][0] > hw_feedback[i][1]:
-                print(f"  Feedback: {YELLOW}{hw_feedback[i]}{COL_RESET}")
+                print(f"  Feedback: {YELLOW}{hw_feedback[i]}{RES}")
             else:
                 print(f"  Feedback: {hw_feedback[i]}")
         self.dbg_model = org_debug_state
@@ -366,33 +380,32 @@ class Logger:
             model.emulator.mem_read(address, size), byteorder='little')
         type_ = "store to" if is_store else "load from"
         if CONF.color:
-            msg = f"    > {CYAN}{type_}{COL_RESET} +0x{normalized_address:x} " \
-                  f"{CYAN}value {COL_RESET}0x{val:x}"
+            msg = f"    > {CYAN}{type_}{RES} +0x{normalized_address:x} " \
+                  f"{CYAN}value {RES}0x{val:x}"
         else:
             msg = f"    > {type_} +0x{normalized_address:x} value 0x{val:x}"
 
         print(msg)
 
-    def dbg_model_instruction(self, normalized_address, model):
+    def dbg_model_instruction(self, normalized_address, test_case, in_speculation, spec_depth):
         if not __debug__:
             return
 
         if not self.dbg_model:
             return
 
-        name = str(model.test_case.address_map[normalized_address])
+        name = str(test_case.address_map[normalized_address])
         if CONF.color:
-            if model.in_speculation:
-                name = YELLOW + name + COL_RESET
+            if in_speculation:
+                name = YELLOW + name + RES
             else:
-                name = GREEN + name + COL_RESET
+                name = GREEN + name + RES
 
-        if model.in_speculation:
-            name = f"[transient, nesting = {len(model.checkpoints)}] " + name
+        if in_speculation:
+            name = f"[transient, nesting = {spec_depth}] " + name
         name = f"0x{normalized_address:<2x}: {name}"
 
         print(name)
-        model.print_state(oneline=True)
 
     def dbg_model_rollback(self, address, base):
         if not __debug__:
@@ -403,7 +416,7 @@ class Logger:
 
         msg = f"ROLLBACK to 0x{address - base:x}"
         if CONF.color:
-            msg = YELLOW + msg + COL_RESET
+            msg = YELLOW + msg + RES
         print(msg)
 
     def dbg_model_exception(self, errno, descr):
@@ -415,8 +428,50 @@ class Logger:
 
         msg = f"EXCEPTION #{errno}: {descr}"
         if CONF.color:
-            msg = RED + msg + COL_RESET
+            msg = RED + msg + RES
         print(msg)
+
+    def dbg_x86_formatted_reg_state(self, sandbox_base, sandbox_top, sandbox_bottom, rax, rbx, rcx,
+                                    rdx, rsi, rdi, flags, xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6,
+                                    xmm7):
+
+        def compressed(val: int):
+            if val >= sandbox_base and val <= sandbox_top:
+                return f"+0x{val - sandbox_base:<15x}"
+            elif val >= sandbox_bottom and val < sandbox_base:
+                return f"-0x{sandbox_base - val:<15x}"
+            else:
+                return f"0x{val:016x}"
+
+        if not __debug__:
+            return
+
+        if not self.dbg_model:
+            return
+
+        rax_ = compressed(rax)
+        rbx_ = compressed(rbx)
+        rcx_ = compressed(rcx)
+        rdx_ = compressed(rdx)
+        rsi_ = compressed(rsi)
+        rdi_ = compressed(rdi)
+
+        if CONF.color:
+            print(f"  {BLUE}rax={RES}{rax_} {BLUE}rbx={RES}{rbx_} {BLUE}rcx={RES}{rcx_}\n"
+                  f"  {BLUE}rdx={RES}{rdx_} {BLUE}rsi={RES}{rsi_} {BLUE}rdi={RES}{rdi_}\n"
+                  f"  {BLUE}flags={RES}0b{flags:012b}\n"
+                  f"  {BLUE}xmm0={RES}0x{xmm0:<32x} {BLUE}xmm1={RES}0x{xmm1:<32x} \n"
+                  f"  {BLUE}xmm2={RES}0x{xmm2:<32x} {BLUE}xmm3={RES}0x{xmm3:<32x} \n"
+                  f"  {BLUE}xmm4={RES}0x{xmm4:<32x} {BLUE}xmm5={RES}0x{xmm5:<32x} \n"
+                  f"  {BLUE}xmm6={RES}0x{xmm6:<32x} {BLUE}xmm7={RES}0x{xmm7:<32x} \n")
+        else:
+            print(f"  rax={rax_} rbx={rbx_} rcx={rcx_}\n"
+                  f"  rdx={rdx_} rsi={rsi_} rdi={rdi_}\n"
+                  f" flags=0b{flags:012b}\n"
+                  f"  xmm0=0x{xmm0:<32x} xmm1=0x{xmm1:<32x} \n"
+                  f"  xmm2=0x{xmm2:<32x} xmm3=0x{xmm3:<32x} \n"
+                  f"  xmm4=0x{xmm4:<32x} xmm5=0x{xmm5:<32x} \n"
+                  f"  xmm6=0x{xmm6:<32x} xmm7=0x{xmm7:<32x} \n")
 
     # ==============================================================================================
     # Coverage
@@ -449,7 +504,7 @@ def pretty_trace(bits: int, merged=False, offset: str = ""):
             + CYAN + s[16:24] + YELLOW + s[24:32] \
             + CYAN + s[32:40] + YELLOW + s[40:48] \
             + CYAN + s[48:56] + YELLOW + s[56:64] \
-            + COL_RESET + s[64:]
+            + RES + s[64:]
     return s
 
 
@@ -458,11 +513,11 @@ def ctrace_colorize(ctrace):
     for item in ctrace:
         res += "'"
         if "mem" in item:
-            res += PURPLE + item + COL_RESET
+            res += PURPLE + item + RES
         elif "pc" in item:
             res += item
         else:
-            res += CYAN + item + COL_RESET
+            res += CYAN + item + RES
         res += "', "
     return res + "]"
 

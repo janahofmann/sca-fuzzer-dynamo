@@ -548,21 +548,21 @@ class Input(np.ndarray):
     seed: int = 0
     data_size: int = 0
     register_start: int = 0
+    simd_start: int = 0
     register_region_size: int = 64  # 56 bytes for GPRs + 8 bytes for alignment
-    simd128_start: int = 0
-    simd128_region_size: int = 256
+    simd_region_size: int = 256  # 8 YMM registers
 
     def __init__(self) -> None:
         pass  # unreachable; defined only for type checking
 
     def __new__(cls):
         data_size = (CONF.input_main_region_size + CONF.input_faulty_region_size
-                     + cls.register_region_size + cls.simd128_region_size) // 8
-        aligned_size = data_size + (4096 - cls.register_region_size - cls.simd128_region_size) // 8
+                     + cls.register_region_size + cls.simd_region_size) // 8
+        aligned_size = data_size + (4096 - cls.register_region_size - cls.simd_region_size) // 8
         obj = super().__new__(cls, (aligned_size,), np.uint64, None, 0, None, None)  # type: ignore
         obj.data_size = data_size
         obj.register_start = (CONF.input_main_region_size + CONF.input_faulty_region_size) // 8
-        obj.simd128_start = obj.register_start + cls.register_region_size // 8
+        obj.simd_start = obj.register_start + cls.register_region_size // 8
 
         # fill the input with zeroes initially before returning, to ensure the
         # 'padding' bytes (created by using 'aligned_size' rather than
@@ -579,14 +579,16 @@ class Input(np.ndarray):
         return hash(tuple(self[0:self.data_size - 1]))
 
     def get_registers(self):
-        return list(self[self.register_start:self.simd128_start])
+        return list(self[self.register_start:self.simd_start])
 
-    def get_simd128_registers(self):
+    def get_simd_registers(self) -> List[int]:
         vals = []
-        for i in range(self.simd128_start, self.data_size - 1, 2):
-            vals.append((int(self[i + 1]) << 64) | int(self[i]))
+        for i in range(self.simd_start, self.data_size - 1, 4):
+            value = 0
+            for j in range(0, 4):
+                value |= int(self[i + j]) << (j * 64)
+            vals.append(value)
         return vals
-        # return list(self[self.simd128_start:self.data_size - 1])
 
     def get_memory(self):
         return self[0:self.register_start]
@@ -614,17 +616,22 @@ class InputTaint(np.ndarray):
     Each element is an boolean value: When it is True, the corresponding element
     of the input impacts the contract trace.
     """
+    # FIXME: remove duplicate code with Input class
     register_start: int = 0
-    register_region_size: int = 320
+    simd_start: int = 0
+    register_region_size: int = 64  # 56 bytes for GPRs + 8 bytes for alignment
+    simd_region_size: int = 256  # 8 YMM registers
 
     def __init__(self) -> None:
         pass  # unreachable; defined only for type checking
 
     def __new__(cls):
         size = (CONF.input_main_region_size + CONF.input_faulty_region_size
-                + cls.register_region_size) // 8
+                + cls.register_region_size + cls.simd_region_size) // 8
         obj = super().__new__(cls, (size,), bool, None, 0, None, None)  # type: ignore
         obj.register_start = (CONF.input_main_region_size + CONF.input_faulty_region_size) // 8
+        obj.simd_start = obj.register_start + cls.register_region_size // 8
+        obj.fill(0)
         return obj
 
 
@@ -704,7 +711,6 @@ class InstructionSetAbstract(ABC):
 class TargetDesc(ABC):
     register_sizes: Dict[str, int]
     registers: Dict[int, List[str]]
-    simd_registers: Dict[int, List[str]]
     branch_conditions: Dict[str, List[str]]
     reg_normalized: Dict[str, str]
     reg_denormalized: Dict[str, Dict[int, str]]
@@ -863,7 +869,6 @@ class Model(ABC):
     code_start: int = 0
     lower_overflow_base: int = 0
     upper_overflow_base: int = 0
-    tracer: Tracer
 
     @abstractmethod
     def __init__(self, sandbox_base: int, code_base: int):
@@ -878,7 +883,7 @@ class Model(ABC):
         pass
 
     @abstractmethod
-    def dbg_get_trace_detailed(self, input, nesting) -> List[str]:
+    def dbg_get_trace_detailed(self, input: Input, nesting: int, raw: bool = False) -> List[str]:
         pass
 
     @abstractmethod

@@ -1,0 +1,107 @@
+ADOX_ADCX These are two new instructions that perform addition with overflow and carry flags separately. They are useful for implementing multiple-precision arithmetic1.
+
+AES        This is an extension that provides hardware acceleration for the Advanced Encryption Standard (AES) algorithm. It consists of six new instructions that perform encryption and decryption operations on 128-bit data blocks2.
+
+AVXAES     This is a feature that allows the use of AES instructions with AVX. It enables the use of 256-bit and 512-bit SIMD registers and operations for encryption and decryption.
+
+BMI1        This is an extension that provides bit manipulation instructions. It adds seven new instructions that perform bit extraction, bit deposit, trailing zero count, leading zero count, and rotate with carry.
+
+BMI2: This is an extension that provides more bit manipulation instructions. It adds four new instructions that perform parallel bit deposit, parallel bit extract, zero high bits starting from specified bit position, and multiply with unsigned high doubleword result.
+
+CLDEMOTE: This is an instruction that performs cache line demote operation. It moves a cache line from a higher level cache to a lower level cache or memory, without invalidating it. It is used to optimize cache usage by hinting that the data is not likely to be accessed soon.
+
+CLWB: This is an instruction that performs cache line write back operation. It writes back a cache line from all levels of the cache hierarchy to memory, but does not invalidate it. It is used to improve performance by reducing the write traffic to memory.
+
+CLZERO: This is an instruction that performs cache line zero operation. It clears a cache line from all levels of the cache hierarchy, and writes zeros to the corresponding memory location. It is used to improve performance by reducing the latency of zeroing operations.
+
+GFNI: This is an extension that supports Galois field instructions. It adds four new instructions that perform arithmetic operations in Galois fields, which are finite fields used for cryptography and error correction.
+
+LONGMODE: This is a feature that supports 64-bit mode operation. It extends the register width from 32 bits to 64 bits, and increases the number of general-purpose registers from eight to 16. It also increases the virtual address space from 4 GB to 256 TB, and the physical address space from 64 GB to 4 PB.
+
+MCOMMIT: This is an instruction that performs memory commit operation. It ensures that all previous stores to memory are globally visible before any subsequent loads from memory are executed. It is used to improve performance by reducing the number of memory barriers needed to ensure memory ordering.
+
+MOVBE: This instruction moves data between memory and the general-purpose registers, reversing the byte order. This can be useful for converting between big-endian and little-endian formats3
+
+MOVDIR: This instruction moves 64 bytes of data from a 64-byte aligned memory location to another 64-byte aligned memory location using direct store instructions. This can improve performance and reduce power consumption for some memory copy operations4
+
+PAUSE: This instruction provides a hint to the processor that the code sequence is a spin-wait loop. This can improve performance and power efficiency by reducing the processor’s power consumption and memory order violations.
+
+PCLMULQDQ: This instruction performs a carry-less multiplication of two 64-bit operands and stores the 128-bit result in an XMM register. This can be useful for implementing some cryptographic algorithms, such as AES-GCM.
+
+RDRAND: This instruction reads a random number from an on-chip hardware random number generator and stores it in a general-purpose register. The random number generator complies with several industry standards and can be used for cryptographic applications or other purposes that require high-quality random numbers.
+
+RDSEED: This instruction reads a random seed value from an on-chip hardware random number generator and stores it in a general-purpose register. The random seed value is derived from entropy sources that are constantly refreshed and can be used to seed other pseudo-random number generators or cryptographic algorithms.
+
+RDTSCP: This instruction reads the current value of the timestamp counter (TSC) and the processor ID (PID) and stores them in general-purpose registers. The TSC is a 64-bit counter that increments with every processor clock cycle and can be used for measuring time intervals or performance. The PID is a unique identifier that can be used to distinguish between different logical processors on the same physical core or package. Unlike the RDTSC instruction, RDTSCP waits until all previous instructions have been executed before reading the TSC value, ensuring more accurate measurements.
+
+RDWRFSGS: This instruction reads the value of either the FS or GS segment base address and stores it in a general-purpose register. This can be useful for accessing thread-local storage or other data structures that are referenced by these segment registers.
+
+SERIALIZE: This instruction ensures that all previous instructions have been completed and all previous loads and stores are globally visible before executing the next instruction. This can be useful for ensuring strong memory ordering semantics or for implementing synchronization primitives.
+
+SHA: This instruction is part of the SHA extensions, which provide hardware acceleration for the secure hash algorithms SHA-1 and SHA-2. The SHA extensions provide six instructions: SHA1RNDS4, SHA1NEXTE, SHA1MSG1, SHA1MSG2, SHA256RNDS2, and SHA256MSG1. These instructions can perform various operations on 128-bit or 256-bit state variables and message blocks that are used in the hash computation. The SHA extensions can improve performance and security for some cryptographic applications that use these hash algorithms.
+
+SSSE3: This instruction is part of the supplemental streaming SIMD extensions 3 (SSSE3), which extend the SSE3 instruction set with 16 additional SIMD instructions that operate on 128-bit XMM registers. The SSSE3 instructions provide various operations, such as horizontal addition or subtraction, absolute value, sign extension, byte shuffling, or packed multiply-add. SSSE3 can improve performance and functionality for some multimedia, graphics, or data processing applications that use these operations.
+
+TBM: This instruction is part of the trailing bit manipulation (TBM) feature, which provides two additional instructions that operate on 32-bit or 64-bit general-purpose registers: BEXTR and BLC* (BLCFILL, BLCI, BLCIC, BLCMSK, BLCS). BEXTR extracts a contiguous bit field from a source operand using a control operand that specifies the start index and length of the bit field. BLC* perform various operations on trailing zeros in a source operand, such as filling them with ones, clearing them to zeros, complementing them, masking them, or setting them to ones. TBM can improve performance and code size for some bit manipulation applications that use these operations.
+
+VAES: This instruction is part of the AES-NI feature, which provides hardware acceleration for the advanced encryption standard (AES) algorithm. The VAES instruction performs AES encryption or decryption on 128-bit or 256-bit data using 128-bit or 256-bit round keys stored in XMM or YMM registers. The VAES instruction supports all AES key sizes (128 bits, 192 bits, or 256 bits) and all AES modes of operation (ECB, CBC, CFB, OFB, CTR, XTS). VAES can improve performance and security for some cryptographic applications that use AES encryption or decryption.
+
+VPCLMULQDQ: This instruction performs a carry-less multiplication of two 64-bit operands from XMM or YMM registers and stores the 128-bit result in an XMM or YMM register. This instruction is similar to PCLMULQDQ but supports three-operand syntax and AVX features such as zeroing-masking and rounding modes. VPCLMULQDQ can improve performance and functionality for some cryptographic algorithms, such as AES-GCM or GHASH.
+
+XOP: This instruction is part of the extended operations (XOP) feature, which provides 37 additional SIMD instructions that operate on 128-bit XMM registers. The XOP instructions provide various operations, such as horizontal vector addition or subtraction, vector comparison, vector rotation, vector permutation, vector conditional move, or vector fused multiply-add. XOP can improve performance and functionality for some multimedia, graphics, or data processing applications that use these operations.
+
+
+
+# Gather
+
+AVX2GATHER This is a feature that allows the use of gather instructions with AVX2. Gather instructions load multiple elements from memory using an index vector and a base address, and store them in a destination vector register.
+
+
+
+# 512
+
+AVX512EVEX This is an extension that increases the width of the SIMD registers to 512 bits, and introduces a new coding scheme called EVEX that allows five-operand instructions and supports masking, rounding, and embedded broadcast. It also adds new instructions for floating-point and integer arithmetic, logical operations, permute, compress, expand, scatter, and conflict detection.
+
+AVX512VEX  This is an extension that provides a subset of AVX512EVEX features using the VEX coding scheme. It supports 512-bit SIMD registers and operations, but does not support masking, rounding, or embedded broadcast. It also has fewer instructions than AVX512EVEX.
+
+
+
+
+# Special Extensions
+
+KEYLOCKER: This is an extension that provides key locker technology, which is a security feature that protects encryption keys from software attacks. It consists of two sub-features: AES key locker (KL-AES) and wide AES key locker (KL-WIDE). KL-AES allows encryption and decryption using AES keys stored in key locker registers, which are inaccessible by software. KL-WIDE allows encryption and decryption using wide AES keys stored in key locker memory, which are encrypted by key locker registers.
+
+KEYLOCKER_WIDE: This is a sub-feature of KEYLOCKER that supports wide AES key locker (KL-WIDE). See KEYLOCKER for more details.
+
+
+RTM: This instruction is part of the restricted transactional memory (RTM) feature, which allows user-mode code to execute multiple instructions atomically using hardware transactional memory (HTM). RTM provides three instructions: XBEGIN, XEND, and XABORT. XBEGIN starts a transactional region, XEND commits the transactional region, and XABORT aborts the transactional region. Transactions can also abort due to various reasons, such as conflicts, interrupts, or resource limitations. RTM can improve performance and scalability for some concurrent applications that use fine-grained locking or lock-free algorithms.
+
+WAITPKG: This instruction is part of the wait and pause extensions (WAPX) feature, which provide two additional instructions that operate on 32-bit or 64-bit general-purpose registers: TPAUSE and UMONITOR. TPAUSE suspends the execution of the current logical processor until the expiration of a timer value specified in an operand or the occurrence of an external event, such as an interrupt or a user-mode interrupt. UMONITOR sets up a linear address range to be monitored by hardware for write operations and puts the processor into a power-efficient state until a write to that range occurs or an external event occurs. WAITPKG can improve performance and power efficiency for some applications that need to wait for certain conditions or events.
+
+WBNOINVD: This instruction writes back and invalidates the cache hierarchy of the current logical processor without generating any external snooping or intervention requests. This can be useful for some cache management operations that do not need to maintain cache coherency with other processors.
+
+
+# System
+
+INVPCID: This is an instruction that performs invalidate process-context identifier (PCID) operation. It invalidates translations based on PCID, which is a tag that identifies a process’s address space. It is used to improve performance by allowing selective invalidation of translations without flushing the entire translation lookaside buffer (TLB).
+
+MONITOR: This instruction sets up a linear address range to be monitored by hardware and puts the processor into a power-efficient state until a write to that range occurs1
+
+MONITORX: This instruction is similar to MONITOR, but it also allows the processor to wake up from an external interrupt, a system management interrupt, or a debug exception2
+
+
+PCONFIG: This instruction performs platform configuration operations, such as enabling or disabling features, setting parameters, or querying status. The exact functionality depends on the sub-leaf value provided in the EAX register.
+
+PKU: This instruction is part of the protection keys feature, which allows user-mode code to restrict access to certain pages of memory by setting protection keys in the page tables and the PKRU register. The PKU instruction can be used to load or store the PKRU register.
+
+PTWRITE: This instruction writes a data packet to a processor trace buffer, which can be used for debugging or performance analysis. The data packet can contain either a value from a general-purpose register or an immediate value.
+
+RDPID: This instruction reads the processor ID (PID) of the logical processor and stores it in a general-purpose register. The PID is a unique identifier that can be used to distinguish between different logical processors on the same physical core or package.
+
+RDPRU: This instruction reads a processor utility register (PRU) and stores it in a general-purpose register. The PRU registers provide information about the processor’s features, capabilities, and status. The exact functionality depends on the PRU number provided in the ECX register.
+
+SMAP: This instruction is part of the supervisor mode access prevention (SMAP) feature, which prevents user-mode code from accessing kernel-mode memory by setting a flag in the CR4 control register. The SMAP feature provides two instructions: CLAC and STAC. CLAC clears the AC flag in the RFLAGS register, enabling SMAP protection, and STAC sets the AC flag in the RFLAGS register, disabling SMAP protection. SMAP can improve security and reliability by preventing user-mode code from accidentally or maliciously modifying kernel-mode data structures.
+
+SMX: This instruction is part of the safer mode extensions (SMX), which provide a secure execution environment for some trusted applications or firmware. The SMX feature provides two instructions: GETSEC and VMCALL. GETSEC enters the secure execution mode (SEM) and performs various operations, such as initializing or terminating a trusted execution environment. VMCALL exits the SEM and transfers control to a hypervisor or a virtual machine monitor (VMM). SMX can improve security and privacy by isolating some sensitive code and data from other software components.
+
+UINTR: This instruction is part of the user-mode interrupts (UINTR) feature, which allows user-mode code to handle external interrupts without involving the kernel. The UINTR feature provides four instructions: ENCLUINTR, SETUIPRI, STUI, and TESTUI. ENCLUINTR enables user-mode interrupts for the current logical processor. SETUIPRI sets the user-mode interrupt priority for the current logical processor. STUI stores a user-interrupt descriptor to a memory location and generates a user-mode interrupt if the current logical processor is enabled for user-mode interrupts and has a lower user-mode interrupt priority than the descriptor. TESTUI tests whether a user-mode interrupt is pending for the current logical processor. UINTR can improve performance and responsiveness for some low-latency applications that need to handle external events quickly.

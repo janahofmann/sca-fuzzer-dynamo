@@ -27,7 +27,7 @@ from .util import Logger, NotSupportedException
 # ==================================================================================================
 class UnicornTargetDesc(ABC):
     registers: List[int]
-    simd128_registers: List[int]
+    simd_registers: List[int]
     barriers: List[str]
     flags_register: int
     reg_decode: Dict[str, int]
@@ -101,7 +101,9 @@ class UnicornTracer(Tracer):
     def observe_instruction(self, address: int, size: int, model) -> None:
         normalized_address = address - model.code_start
         if normalized_address in model.test_case.address_map:
-            self.LOG.dbg_model_instruction(normalized_address, model)
+            self.LOG.dbg_model_instruction(normalized_address, model.test_case,
+                                           model.in_speculation, len(model.checkpoints))
+            model.print_state()
 
         if model.in_speculation:
             return
@@ -334,9 +336,11 @@ class UnicornModel(Model, ABC):
         self.execution_tracing_enabled = False
         return ctraces, taints
 
-    def dbg_get_trace_detailed(self, input, nesting) -> List[str]:
+    def dbg_get_trace_detailed(self, input, nesting, raw: bool = False) -> List[str]:
         _, __ = self._execute_test_case([input], nesting)
         trace = self.tracer.get_contract_trace_full()
+        if raw:
+            return [str(x) for x in trace]
         normalized_trace = []
         for val in trace:
             if self.code_start <= val and val < self.code_start + 0x1000:
@@ -359,7 +363,7 @@ class UnicornModel(Model, ABC):
         self.pending_fault_id = 0
 
     @abstractmethod
-    def print_state(self, oneline: bool = False):
+    def print_state(self):
         pass
 
     @staticmethod
@@ -957,3 +961,14 @@ class BaseTaintTracker(TaintTrackerInterface):
                 taint[i] = False
 
         return taint
+
+
+# ==================================================================================================
+# DynamoRIO Models
+# ==================================================================================================
+
+
+class DRModel(Model, ABC):
+    """
+    Base class for all DynamoRIO-based models.
+    """

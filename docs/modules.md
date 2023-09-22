@@ -41,14 +41,14 @@ multiple Python files:
 The modules above are ISA-independent. The architecture-specific implementations
 are located in the subdirectories. For example, the implementation of the modules
 for the x86-64 architecture is located in `src/x86/`. It's structure largely
-mirrors the main modules of revizor (e.g., `x86_model.py` contains x86-specific
+mirrors the main modules of revizor (e.g., `x86_*_model.py` contains x86-specific
 parts of the **Model** module). The only unique parts are:
 
 * `*_target_desc.py` - defines constants describing the ISA (e.g., a list of
   available registers) and some helper functions.
 * `isa_spec/get_spec.py` - a script for transforming the ISA description provided
   by the CPU vendor (different for every vendor) into a unified JSON format
-* `executor/` - contains a low-level implementation of the executor. The 
+* `executor/` - contains a low-level implementation of the executor. The
   implementation will be different for each architecture. For black-box x86 CPUs,
   it is a Linux kernel module.
 

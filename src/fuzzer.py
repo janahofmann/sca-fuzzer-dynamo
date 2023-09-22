@@ -444,8 +444,8 @@ class ArchitecturalFuzzer(Fuzzer):
         # collect architectural model traces
         ctraces: List[List[int]] = []
         for input_ in inputs:
-            self.model.trace_test_case([input_], CONF.model_max_nesting)
-            ctraces.append(self.model.tracer.get_contract_trace_full())
+            ctrace = self.model.dbg_get_trace_detailed(input_, CONF.model_max_nesting, raw=True)
+            ctraces.append([int(x) for x in ctrace])
 
         # check for violations - since we simply check the equality of traces, we don't need
         # to invoke the analyser
@@ -460,5 +460,9 @@ class ArchitecturalFuzzer(Fuzzer):
                 eq_cls.measurements = [Measurement(i, inputs[i], ctraces[i][0], htraces[i][0])]
                 eq_cls.build_htrace_map()
                 return eq_cls
+            if "dbg_traces" in CONF.logging_modes:
+                print(f"Input #{i}")
+                print(f"Model: {[hex(v) for v in ctraces[i]]}")
+                print(f"CPU:   {[hex(v) for v in htraces[i]]}")
 
         return None

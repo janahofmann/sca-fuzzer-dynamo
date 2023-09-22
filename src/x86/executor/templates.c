@@ -194,7 +194,6 @@ int load_template(size_t tc_size)
     "lfence; lfence; lfence; lfence; lfence \n");
 
 
-#if VENDOR_ID == 1 // Intel
 #define SET_REGISTER_FROM_INPUT()\
     asm volatile("\n.intel_syntax noprefix\n" \
     "lea rsp, [r14 + "xstr(REG_INIT_OFFSET)"]\n" \
@@ -207,27 +206,9 @@ int load_template(size_t tc_size)
     "popfq \n" \
     "popq rsp \n" \
     "mov rbp, rsp \n" \
-    "bndmk bnd0, [r14 + 0x1000]\n" \
-    "bndmk bnd1, [r14 + 0x1000]\n" \
-    "bndmk bnd2, [r14 + 0x1000]\n" \
-    "bndmk bnd3, [r14 + 0x1000]\n" \
+    "mov qword ptr [r14 + "xstr(REG_INIT_OFFSET)" + 0x38], 0\n" \
     ".att_syntax noprefix");
 
-#elif VENDOR_ID == 2 // AMD
-#define SET_REGISTER_FROM_INPUT()\
-    asm volatile("\n.intel_syntax noprefix\n" \
-    "lea rsp, [r14 + "xstr(REG_INIT_OFFSET)"]\n" \
-    "popq rax \n" \
-    "popq rbx \n" \
-    "popq rcx \n" \
-    "popq rdx \n" \
-    "popq rsi \n" \
-    "popq rdi \n" \
-    "popfq \n" \
-    "popq rsp \n" \
-    "mov rbp, rsp \n" \
-    ".att_syntax noprefix");
-#endif
 
 inline void prologue(void)
 {
@@ -265,7 +246,36 @@ inline void prologue(void)
         "mov r13, 0\n"
         "mov r15, 0\n"
 
-        // start monitoring SMIs
+        // set SIMD registers
+#ifdef FEATURE_avx
+        "vmovdqa ymm0, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x00]\n"
+        "vmovdqa ymm1, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x20]\n"
+        "vmovdqa ymm2, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x40]\n"
+        "vmovdqa ymm3, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x60]\n"
+        "vmovdqa ymm4, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x80]\n"
+        "vmovdqa ymm5, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xa0]\n"
+        "vmovdqa ymm6, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xc0]\n"
+        "vmovdqa ymm7, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xe0]\n"
+#elif FEATURE_sse
+        "movdqa xmm0, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x00]\n"
+        "movdqa xmm1, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x20]\n"
+        "movdqa xmm2, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x40]\n"
+        "movdqa xmm3, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x60]\n"
+        "movdqa xmm4, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0x80]\n"
+        "movdqa xmm5, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xa0]\n"
+        "movdqa xmm6, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xc0]\n"
+        "movdqa xmm7, [r14 + "xstr(SIMD_INIT_OFFSET)" + 0xe0]\n"
+#endif
+
+        // set MPX bounds registers
+#if FEATURE_mpx
+        "bndmk bnd0, [r14 + 0x1000]\n"
+        "bndmk bnd1, [r14 + 0x1000]\n"
+        "bndmk bnd2, [r14 + 0x1000]\n"
+        "bndmk bnd3, [r14 + 0x1000]\n"
+#endif
+
+        // start monitoring interrupts
         READ_SMI_START("r12")
     );
 }
@@ -452,6 +462,9 @@ void template_l1d_prime_probe(void) {
     SET_REGISTER_FROM_INPUT();
 
     PIPELINE_RESET();
+
+    // asm_volatile_intel(
+        // "mov rax, qword ptr [r14 + 0x200]\n");
 
     // Execute the test case
     asm("\nlfence\n"

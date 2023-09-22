@@ -72,7 +72,16 @@ extern measurement_t *measurements;
 #define FAULTY_REGION_SIZE 4096
 #define OVERFLOW_REGION_SIZE 4096
 #define REG_INITIALIZATION_REGION_SIZE 64
+#define SIMD_INITIALIZATION_REGION_SIZE 256
 #define EVICT_REGION_SIZE (L1D_ASSOCIATIVITY * 4096)
+
+typedef struct Input
+{
+    char main_region[MAIN_REGION_SIZE];
+    char faulty_region[FAULTY_REGION_SIZE];
+    char reg_region[REG_INITIALIZATION_REGION_SIZE];
+    char simd_region[SIMD_INITIALIZATION_REGION_SIZE];
+} input_t;
 
 typedef struct Sandbox
 {
@@ -88,7 +97,8 @@ typedef struct Sandbox
 extern sandbox_t *sandbox;
 extern void *stack_base;
 
-#define REG_INIT_OFFSET 8192 // (MAIN_REGION_SIZE + FAULTY_REGION_SIZE)
+#define REG_INIT_OFFSET (MAIN_REGION_SIZE + FAULTY_REGION_SIZE)
+#define SIMD_INIT_OFFSET (REG_INIT_OFFSET + REG_INITIALIZATION_REGION_SIZE)
 #define EVICT_REGION_OFFSET (EVICT_REGION_SIZE + OVERFLOW_REGION_SIZE)
 #define RSP_OFFSET 12288         // (MAIN_REGION_SIZE + FAULTY_REGION_SIZE + OVERFLOW_REGION_SIZE)
 #define MEASUREMENT_OFFSET 12296 // RSP_OFFSET + sizeof(stored_rsp)

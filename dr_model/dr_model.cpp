@@ -140,7 +140,8 @@ static void module_load_event(void *drcontext, const module_data_t *mod, bool lo
 {
     size_t modoffs;
     drsym_error_t sym_res =
-        drsym_lookup_symbol(mod->full_path, "revizor_test_case", &modoffs, DRSYM_DEMANGLE);
+        drsym_lookup_symbol(mod->full_path, "__libc_start_main", &modoffs, DRSYM_DEMANGLE);
+        // drsym_lookup_symbol(mod->full_path, "main", &modoffs, DRSYM_DEMANGLE);
     if (sym_res == DRSYM_SUCCESS) {
         app_pc towrap = mod->start + modoffs;
         drwrap_wrap(towrap, wrapper_pre_func_callback, wrapper_post_func_callback);
